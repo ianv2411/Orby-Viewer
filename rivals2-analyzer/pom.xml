@@ -1,0 +1,94 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	
+	<parent>
+   		<groupId>org.springframework.boot</groupId>
+    	<artifactId>spring-boot-starter-parent</artifactId>
+    	<version>3.2.5</version>
+	</parent>
+
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>com.Ian</groupId>
+	<artifactId>rivals2-analyzer</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+
+	<name>rivals2-analyzer</name>
+	<description>Rivals of Aether 2 Move Analyzer</description>
+
+	<properties>
+		<maven.compiler.source>21</maven.compiler.source>
+		<maven.compiler.target>21</maven.compiler.target>
+	</properties>
+
+	<dependencies>
+
+		<!-- Spring Boot Web (includes Tomcat) -->
+		<dependency>
+    		<groupId>org.springframework.boot</groupId>
+    		<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+
+		<!-- PostgreSQL -->
+		<dependency>
+    		<groupId>org.postgresql</groupId>
+    		<artifactId>postgresql</artifactId>
+		</dependency>
+
+		<!-- JPA (database ORM) -->
+		<dependency>
+    		<groupId>org.springframework.boot</groupId>
+    		<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+		
+		<!-- Deeplearning4j -->
+		<dependency>
+			<groupId>org.deeplearning4j</groupId>
+			<artifactId>deeplearning4j-core</artifactId>
+			<version>1.0.0-M2.1</version>
+		</dependency>
+
+		<dependency>
+    		<groupId>org.datavec</groupId>
+    		<artifactId>datavec-data-image</artifactId>
+    		<version>1.0.0-M2.1</version>
+		</dependency>
+				
+		<dependency>
+    		<groupId>org.bytedeco</groupId>
+    		<artifactId>javacpp</artifactId>
+    		<version>1.5.10</version>
+		</dependency>
+		
+		<dependency>
+    		<groupId>org.bytedeco</groupId>
+   		 	<artifactId>opencv-platform</artifactId>
+    		<version>4.9.0-1.5.10</version>
+		</dependency>
+		
+		<!-- ND4J Backend (CPU version) -->
+		<dependency>
+			<groupId>org.nd4j</groupId>
+			<artifactId>nd4j-native-platform</artifactId>
+			<version>1.0.0-M2.1</version>
+		</dependency>
+		
+		<!-- Window Capture -->
+		<dependency>
+    		<groupId>net.java.dev.jna</groupId>
+   			<artifactId>jna-platform</artifactId>
+    		<version>5.14.0</version>
+		</dependency>
+	</dependencies>
+	
+	<build>
+    	<plugins>
+        	<plugin>
+            	<groupId>org.springframework.boot</groupId>
+            	<artifactId>spring-boot-maven-plugin</artifactId>
+        	</plugin>
+    	</plugins>
+	</build>
+
+</project>
