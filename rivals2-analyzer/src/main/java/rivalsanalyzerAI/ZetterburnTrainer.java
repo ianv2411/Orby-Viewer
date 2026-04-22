@@ -1,149 +1,136 @@
 package rivalsanalyzerAI;
 
-import java.io.File;
-import java.util.Random;
-
-import org.datavec.api.io.labels.ParentPathLabelGenerator;
-import org.datavec.api.split.FileSplit;
 import org.datavec.image.loader.NativeImageLoader;
-import org.datavec.image.recordreader.ImageRecordReader;
-import org.datavec.image.transform.FlipImageTransform;
-import org.datavec.image.transform.RotateImageTransform;
-
-import org.deeplearning4j.datasets.datavec.RecordReaderDataSetIterator;
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork;
-import org.deeplearning4j.nn.conf.MultiLayerConfiguration;
-import org.deeplearning4j.nn.conf.NeuralNetConfiguration;
-import org.deeplearning4j.nn.conf.inputs.InputType;
+import org.deeplearning4j.nn.conf.*;
 import org.deeplearning4j.nn.conf.layers.*;
 import org.deeplearning4j.nn.weights.WeightInit;
+import org.deeplearning4j.optimize.listeners.ScoreIterationListener;
 import org.deeplearning4j.util.ModelSerializer;
 
 import org.nd4j.linalg.activations.Activation;
-import org.nd4j.linalg.dataset.api.iterator.DataSetIterator;
-import org.nd4j.linalg.dataset.api.preprocessor.ImagePreProcessingScaler;
+import org.nd4j.linalg.api.ndarray.INDArray;
+import org.nd4j.linalg.dataset.DataSet;
+import org.nd4j.linalg.factory.Nd4j;
 import org.nd4j.linalg.learning.config.Adam;
 import org.nd4j.linalg.lossfunctions.LossFunctions;
 
+import org.nd4j.linalg.indexing.INDArrayIndex;
+import org.nd4j.linalg.indexing.NDArrayIndex;
+
+import java.io.File;
+import java.util.*;
+
 public class ZetterburnTrainer {
+
+    static int height = 64;
+    static int width = 64;
+    static int channels = 3;
+    static int sequenceLength = 5;
+
+    static List<String> labels = Arrays.asList(
+            "bair","dair","dash attack","dspecial","dstrong","dtilt",
+            "fair","fspecial","fstrong","ftilt","grab","jab",
+            "nair","nspecial","upair","upspecial","upstrong","utilt"
+    );
 
     public static void main(String[] args) throws Exception {
 
-        int height = 64;
-        int width = 64;
-        int channels = 3;
-        int batchSize = 8;
-        int numClasses = 18; 
+        File baseDir = new File("src/main/resources/training/zetterburn");
+        NativeImageLoader loader = new NativeImageLoader(height, width, channels);
 
-        File trainDir = new File("src/main/resources/training/zetterburn");
+        List<DataSet> datasetList = new ArrayList<>();
 
-        FileSplit fileSplit = new FileSplit(
-                trainDir,
-                NativeImageLoader.ALLOWED_FORMATS,
-                new Random(123));
+        for (int labelIndex = 0; labelIndex < labels.size(); labelIndex++) {
 
-        ParentPathLabelGenerator labelMaker = new ParentPathLabelGenerator();
+            File moveDir = new File(baseDir, labels.get(labelIndex));
 
-        ImageRecordReader reader =
-                new ImageRecordReader(height, width, channels, labelMaker);
+            File[] seqFolders = moveDir.listFiles();
 
-        reader.initialize(fileSplit);
-        FlipImageTransform flip = new FlipImageTransform(1);
-        RotateImageTransform rotate = new RotateImageTransform(new Random(123), 10);
-        System.out.println(reader.getLabels());
-        DataSetIterator dataIter =
-                new RecordReaderDataSetIterator(reader, batchSize, 1, numClasses);
+            if (seqFolders == null) {
+                System.out.println("Missing folder: " + moveDir.getAbsolutePath());
+                continue;
+            }
 
-        ImagePreProcessingScaler scaler = new ImagePreProcessingScaler(0, 1);
-        scaler.fit(dataIter);
-        dataIter.setPreProcessor(scaler);
+            for (File seqFolder : seqFolders) {
+
+                if (!seqFolder.isDirectory()) continue;
+
+                File[] frames = seqFolder.listFiles((d, name) -> name.endsWith(".png"));
+
+                if (frames == null || frames.length < 3) continue;
+
+                Arrays.sort(frames);
+
+                INDArray sequence = Nd4j.zeros(1, channels * height * width, sequenceLength);
+
+                for (int t = 0; t < sequenceLength; t++) {
+
+                    INDArray frame;
+
+                    if (t < frames.length) {
+                        frame = loader.asMatrix(frames[t]).div(255.0);
+                    } else {
+                        frame = Nd4j.zeros(1, channels, height, width);
+                    }
+
+                    INDArray flat = frame.reshape(1, channels * height * width);
+
+                    sequence.put(
+                            new INDArrayIndex[]{
+                                    NDArrayIndex.point(0),
+                                    NDArrayIndex.all(),
+                                    NDArrayIndex.point(t)
+                            },
+                            flat
+                    );
+                }
+
+                INDArray label = Nd4j.zeros(1, labels.size(), sequenceLength);
+
+                // Put the label ONLY on the last frame
+                label.putScalar(
+                	new int[]{0, labelIndex, sequenceLength - 1},
+                	1.0
+                );
+
+                datasetList.add(new DataSet(sequence, label));
+            }
+        }
+
+        System.out.println("Loaded sequences: " + datasetList.size());
+
+        DataSet allData = DataSet.merge(datasetList);
 
         MultiLayerConfiguration config = new NeuralNetConfiguration.Builder()
-                .seed(123)
-                .updater(new Adam(0.0005))
+                .updater(new Adam(0.001))
                 .weightInit(WeightInit.XAVIER)
                 .list()
-
-                // Block 1
-                .layer(new ConvolutionLayer.Builder(3, 3)
-                        .nIn(channels)
-                        .stride(1, 1)
-                        .padding(1, 1)
-                        .nOut(32)
-                        .activation(Activation.RELU)
-                        .build())
-
-                .layer(new ConvolutionLayer.Builder(3, 3)
-                        .stride(1, 1)
-                        .padding(1, 1)
-                        .nOut(32)
-                        .activation(Activation.RELU)
-                        .build())
-
-                .layer(new SubsamplingLayer.Builder(SubsamplingLayer.PoolingType.MAX)
-                        .kernelSize(2, 2)
-                        .stride(2, 2)
-                        .build())
-
-                // Block 2
-                .layer(new ConvolutionLayer.Builder(3, 3)
-                        .stride(1, 1)
-                        .padding(1, 1)
-                        .nOut(64)
-                        .activation(Activation.RELU)
-                        .build())
-
-                .layer(new ConvolutionLayer.Builder(3, 3)
-                        .stride(1, 1)
-                        .padding(1, 1)
-                        .nOut(64)
-                        .activation(Activation.RELU)
-                        .build())
-
-                .layer(new SubsamplingLayer.Builder(SubsamplingLayer.PoolingType.MAX)
-                        .kernelSize(2, 2)
-                        .stride(2, 2)
-                        .build())
-
-                // Dense classifier
-                .layer(new DenseLayer.Builder()
+                .layer(new LSTM.Builder()
+                        .nIn(channels * height * width)
                         .nOut(256)
-                        .activation(Activation.RELU)
-                        .dropOut(0.5)
+                        .activation(Activation.TANH)
                         .build())
-
-                .layer(new OutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
-                        .nOut(numClasses)
+                .layer(new RnnOutputLayer.Builder(LossFunctions.LossFunction.MCXENT)
                         .activation(Activation.SOFTMAX)
+                        .nOut(labels.size())
                         .build())
-
-                .setInputType(InputType.convolutional(height, width, channels))
                 .build();
-        
+
         MultiLayerNetwork model = new MultiLayerNetwork(config);
         model.init();
 
-        for (int epoch = 0; epoch < 15; epoch++) {
+        model.setListeners(new ScoreIterationListener(10));
 
-            reader.initialize(fileSplit);
-            dataIter.reset();
-            model.fit(dataIter);
-
-            reader.initialize(fileSplit, new FlipImageTransform(1));
-            dataIter.reset();
-            model.fit(dataIter);
-
-            reader.initialize(fileSplit, new RotateImageTransform(new Random(), 8));
-            dataIter.reset();
-            model.fit(dataIter);
-
-            System.out.println("Epoch " + (epoch + 1) + " complete");
+        for (int i = 0; i < 10; i++) {
+            model.fit(allData);
+            System.out.println("Epoch " + (i + 1) + " complete");
         }
 
-        System.out.println("Training complete");
-        
-        File modelFile = new File("src/main/resources/models/zetterburnModel.zip");
-        model.save(modelFile, true);
+        File modelFile = new File("models/zetterburn_sequence_model.zip");
+        modelFile.getParentFile().mkdirs();
+
+        ModelSerializer.writeModel(model, modelFile, true);
 
         System.out.println("Model saved");
     }
