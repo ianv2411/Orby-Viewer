@@ -35,10 +35,22 @@ import org.bytedeco.opencv.opencv_core.*;
 import static org.bytedeco.opencv.global.opencv_core.*;
 import static org.bytedeco.opencv.global.opencv_imgproc.*;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import rivalsanalyzerAI.Entity.Match;
+import rivalsanalyzerAI.Repository.MatchRepository;
+
 @Service
 public class MovePredictionService {
 
-    private final Map<String, Integer> moveCounts = new HashMap<>();
+	private final MatchRepository matchRepository;
+
+    public MovePredictionService(MatchRepository matchRepository) {
+        this.matchRepository = matchRepository;
+    }
+
+    private final Map<String, Integer> moveCounts =
+            Collections.synchronizedMap(new HashMap<>());
 
     public Map<String, Integer> getMoveCounts() {
         return moveCounts;
@@ -65,16 +77,54 @@ public class MovePredictionService {
 
     //predictor toggle
     private volatile boolean running = false;
+    
+    private Thread predictorThread;
 
     public void startPredictor() {
-        if (!running) {
-            running = true;
-            new Thread(() -> runPredictor()).start();
+    	if (running) {
+            System.out.println("Predictor already running");
+            return;
         }
+
+        moveCounts.clear();
+
+        running = true;
+
+        predictorThread = new Thread(this::runPredictor);
+
+        predictorThread.setDaemon(true);
+
+        predictorThread.start();
+
+        System.out.println("Predictor started");
     }
 
     public void stopPredictor() {
+    	if (!running) {
+            return;
+        }
+
         running = false;
+
+        try {
+
+        	
+        	// convert moveCounts into JSON file 
+            ObjectMapper mapper = new ObjectMapper();
+
+            String jsonMoves = mapper.writeValueAsString(moveCounts);
+
+            Match match = new Match(1L, jsonMoves);
+
+            matchRepository.save(match);
+
+            System.out.println("Match saved to PostgreSQL");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        System.out.println("Predictor stopped");
     }
     
     public void runPredictor() {
