@@ -114,7 +114,10 @@ public class MovePredictionService {
 
             String jsonMoves = mapper.writeValueAsString(moveCounts);
 
-            Match match = new Match(1L, jsonMoves);
+            // TEMP hardcoded user
+            Long currentUserId = 1L;
+
+            Match match = new Match(currentUserId, jsonMoves);
 
             matchRepository.save(match);
 
