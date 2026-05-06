@@ -23,11 +23,15 @@ import java.util.*;
 
 public class ZetterburnTrainer {
 
+	// image dimentions
     static int height = 64;
     static int width = 64;
     static int channels = 3;
+    
+    //frames used per sequence
     static int sequenceLength = 5;
 
+    //move labels
     static List<String> labels = Arrays.asList(
             "bair","dair","dash attack","dspecial","dstrong","dtilt",
             "fair","fspecial","fstrong","ftilt","grab","jab",
@@ -41,6 +45,7 @@ public class ZetterburnTrainer {
 
         List<DataSet> datasetList = new ArrayList<>();
 
+        //loop through every move label folder
         for (int labelIndex = 0; labelIndex < labels.size(); labelIndex++) {
 
             File moveDir = new File(baseDir, labels.get(labelIndex));
@@ -52,6 +57,7 @@ public class ZetterburnTrainer {
                 continue;
             }
 
+            //loop through each sequence folder
             for (File seqFolder : seqFolders) {
 
                 if (!seqFolder.isDirectory()) continue;
@@ -64,6 +70,7 @@ public class ZetterburnTrainer {
 
                 INDArray sequence = Nd4j.zeros(1, channels * height * width, sequenceLength);
 
+                //fill sequence with frame data
                 for (int t = 0; t < sequenceLength; t++) {
 
                     INDArray frame;
@@ -88,7 +95,7 @@ public class ZetterburnTrainer {
 
                 INDArray label = Nd4j.zeros(1, labels.size(), sequenceLength);
 
-                // Put the label ONLY on the last frame
+                //put the label only on the last frame
                 label.putScalar(
                 	new int[]{0, labelIndex, sequenceLength - 1},
                 	1.0
@@ -100,8 +107,10 @@ public class ZetterburnTrainer {
 
         System.out.println("Loaded sequences: " + datasetList.size());
 
+        //merge samples together
         DataSet allData = DataSet.merge(datasetList);
 
+        // Ai configuration
         MultiLayerConfiguration config = new NeuralNetConfiguration.Builder()
                 .updater(new Adam(0.001))
                 .weightInit(WeightInit.XAVIER)
@@ -122,11 +131,13 @@ public class ZetterburnTrainer {
 
         model.setListeners(new ScoreIterationListener(10));
 
+        //train for 10 epoch's
         for (int i = 0; i < 10; i++) {
             model.fit(allData);
             System.out.println("Epoch " + (i + 1) + " complete");
         }
 
+        //save to ZIP file
         File modelFile = new File("models/zetterburn_sequence_model.zip");
         modelFile.getParentFile().mkdirs();
 

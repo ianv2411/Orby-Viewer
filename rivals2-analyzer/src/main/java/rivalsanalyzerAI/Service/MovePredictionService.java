@@ -43,12 +43,15 @@ import rivalsanalyzerAI.Repository.MatchRepository;
 @Service
 public class MovePredictionService {
 
+	//repository used to save match history to PostgreSQL
 	private final MatchRepository matchRepository;
 
+	
     public MovePredictionService(MatchRepository matchRepository) {
         this.matchRepository = matchRepository;
     }
 
+    //stores detected moves when running the program
     private final Map<String, Integer> moveCounts =
             Collections.synchronizedMap(new HashMap<>());
 
@@ -67,9 +70,11 @@ public class MovePredictionService {
             "nair","nspecial","upair","upspecial","upstrong","utilt"
     );
 
+    //stores recent predictions
     List<INDArray> predictionHistory = Collections.synchronizedList(new LinkedList<>());
     int SMOOTH_WINDOW = 12;
 
+    //stability filtering
     String lastMove = "";
     String pendingMove = "";
     int pendingCount = 0;
@@ -90,6 +95,7 @@ public class MovePredictionService {
 
         running = true;
 
+        //runs predictor on separate thread
         predictorThread = new Thread(this::runPredictor);
 
         predictorThread.setDaemon(true);
@@ -99,6 +105,7 @@ public class MovePredictionService {
         System.out.println("Predictor started");
     }
 
+    //stop predictor + saves match history
     public void stopPredictor() {
     	if (!running) {
             return;
@@ -109,16 +116,17 @@ public class MovePredictionService {
         try {
 
         	
-        	// convert moveCounts into JSON file 
+        	//convert moveCounts into JSON file 
             ObjectMapper mapper = new ObjectMapper();
 
             String jsonMoves = mapper.writeValueAsString(moveCounts);
 
-            // TEMP hardcoded user
+            //TEMP hardcoded user ID
             Long currentUserId = 1L;
 
             Match match = new Match(currentUserId, jsonMoves);
 
+            //saves match into PostgreSQL
             matchRepository.save(match);
 
             System.out.println("Match saved to PostgreSQL");
@@ -130,6 +138,7 @@ public class MovePredictionService {
         System.out.println("Predictor stopped");
     }
     
+    //main prediction loop
     public void runPredictor() {
         try {
 
@@ -149,12 +158,14 @@ public class MovePredictionService {
 
             LinkedList<INDArray> frameBuffer = new LinkedList<>();
 
+            //main prediction loop
             while (running) {
 
                 Rectangle gameArea = getGameWindowBounds();
                 BufferedImage screenshot = robot.createScreenCapture(gameArea);
                 Mat screen = bufferedImageToMat(screenshot);
 
+                //detect character position
                 Rect currentBox = detectZetterburn(screen, template);
 
                 if (currentBox != null) {
@@ -172,6 +183,7 @@ public class MovePredictionService {
                     continue;
                 }
 
+                //crop image around character
                 Mat cropped = new Mat(screen, boxToUse);
                 BufferedImage cropImg = matToBufferedImage(cropped);
 
@@ -183,10 +195,12 @@ public class MovePredictionService {
                     frameBuffer.removeFirst();
                 }
 
+                //run prediction once enough frames exist
                 if (frameBuffer.size() == sequenceLength) {
 
                     INDArray sequence = Nd4j.zeros(1, channels * height * width, sequenceLength);
 
+                    //fill with buffered frames
                     for (int t = 0; t < sequenceLength; t++) {
                         sequence.put(new INDArrayIndex[]{
                                 NDArrayIndex.point(0),
@@ -213,7 +227,7 @@ public class MovePredictionService {
                         }
                     }
 
-                    //better logic to stop thread blocking
+                    //average prediction probabilities
                     INDArray avg = Nd4j.zeros(labels.size());
 
                     synchronized (predictionHistory) {
@@ -232,9 +246,11 @@ public class MovePredictionService {
                         avg.divi(size);
                     }
 
+                    //get highest confidence prediction
                     int predictedClass = Nd4j.argMax(avg, 0).getInt(0);
                     double confidence = avg.getDouble(predictedClass);
 
+                    //ignore weak predictions
                     if (confidence > 0.06) {
                         String move = labels.get(predictedClass);
 
@@ -268,6 +284,7 @@ public class MovePredictionService {
         }
     }
 
+    //get game window for OpenCV
     public Rectangle getGameWindowBounds() {
         final Rectangle[] rect = {null};
 
@@ -295,6 +312,7 @@ public class MovePredictionService {
         return rect[0];
     }
 
+    //zetterburn detection method
     public Rect detectZetterburn(Mat screen, Mat template) {
         int resultCols = screen.cols() - template.cols() + 1;
         int resultRows = screen.rows() - template.rows() + 1;
@@ -321,6 +339,7 @@ public class MovePredictionService {
         );
     }
 
+    //buffered image method
     public Mat bufferedImageToMat(BufferedImage img) {
         BufferedImage converted = new BufferedImage(
                 img.getWidth(), img.getHeight(),
@@ -336,6 +355,7 @@ public class MovePredictionService {
         return mat;
     }
 
+    //mat to buffered image method
     public BufferedImage matToBufferedImage(Mat mat) {
         BufferedImage img = new BufferedImage(
                 mat.cols(), mat.rows(),
