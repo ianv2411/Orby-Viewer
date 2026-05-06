@@ -17,11 +17,4 @@ public class MatchController {
     public MatchController(MatchRepository matchRepository) {
         this.matchRepository = matchRepository;
     }
-
-    // ---------------- HISTORY ENDPOINT ----------------
-    @GetMapping("/history/{userId}")
-    public List<Match> getHistory(@PathVariable Long userId) {
-
-        return matchRepository.findByUserId(userId);
-    }
 }

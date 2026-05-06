@@ -1,8 +1,12 @@
 package rivalsanalyzerAI.Controller;
 
+import java.util.List;
+
 import org.springframework.web.bind.annotation.*;
 
 import rivalsanalyzerAI.Service.MovePredictionService;
+import rivalsanalyzerAI.Repository.MatchRepository;
+import rivalsanalyzerAI.Entity.Match;
 
 import java.util.Map;
 
@@ -14,9 +18,14 @@ import java.util.Map;
 public class MoveController {
 
     private final MovePredictionService service;
+    private final MatchRepository matchRepository;
 
-    public MoveController(MovePredictionService service) {
+    public MoveController(
+            MovePredictionService service,
+            MatchRepository matchRepository) {
+
         this.service = service;
+        this.matchRepository = matchRepository;
     }
 
     @GetMapping
@@ -31,5 +40,10 @@ public class MoveController {
     @PostMapping("/stop")
     public void stop() {
         service.stopPredictor();
+    }
+    
+    @GetMapping("/history/{userId}")
+    public List<Match> getHistory(@PathVariable Long userId) {
+        return matchRepository.findByUserId(userId);
     }
 }
